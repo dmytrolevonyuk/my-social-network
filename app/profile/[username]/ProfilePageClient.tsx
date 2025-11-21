@@ -86,7 +86,11 @@ export default function ProfilePageClient({
       images: Array.isArray(post.images)
         ? post.images.filter(
             (img): img is UploadedFile =>
-              img && typeof img === "object" && "url" in img && "type" in img
+              img !== null &&
+typeof img === "object" &&
+"url" in img &&
+"type" in img
+
           )
         : [],
 
