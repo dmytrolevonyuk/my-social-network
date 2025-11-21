@@ -1,0 +1,188 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  COMMENT
+  COMMENT_REPLY
+  COMMENT_LIKE
+}
+
+enum DMStatus {
+  PENDING 
+  ACCEPTED 
+  BLOCKED
+}
+
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  clerkid   String   @unique
+  name      String?
+  bio       String?
+  image     String?
+  location  String?
+  website   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  
+  posts    Post[]
+  comments Comment[]
+
+
+  likes        Like[]
+  commentLikes CommentLike[]
+
+ 
+  followers Follows[] @relation("following")
+  following Follows[] @relation("follower")
+
+  
+  notifications        Notification[] @relation("userNotifications")
+  notificationsCreated Notification[] @relation("notificationCreator")
+
+  
+  dmParticipants DMParticipant[] @relation("UserDMParticipants")
+  dmMessages     DMMessage[]     @relation("UserDMs")
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  authorId  String
+  content   String?
+  images    Json?
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments      Comment[]
+  likes         Like[]
+  notifications Notification[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  authorId  String
+  postId    String
+  parentId  String?
+  createdAt DateTime @default(now())
+
+  author             User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post               Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent             Comment?       @relation("CommentReplies", fields: [parentId], references: [id])
+  replies            Comment[]      @relation("CommentReplies")
+  likes              CommentLike[]
+  notifications      Notification[] @relation("notificationComment")
+  replyNotifications Notification[] @relation("notificationReplyComment")
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, postId])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([commentId])
+}
+
+model Follows {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followerId, followingId])
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  userId         String
+  creatorId      String
+  type           NotificationType
+  read           Boolean          @default(false)
+  postId         String?
+  commentId      String?
+  replyCommentId String?
+  createdAt      DateTime         @default(now())
+
+  user         User     @relation("userNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  creator      User     @relation("notificationCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  post         Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment      Comment? @relation("notificationComment", fields: [commentId], references: [id], onDelete: Cascade)
+  replyComment Comment? @relation("notificationReplyComment", fields: [replyCommentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model DMThread {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastMessageAt DateTime? @default(now())
+
+  messages     DMMessage[]
+  participants DMParticipant[]
+
+  @@index([lastMessageAt, id])
+}
+
+model DMParticipant {
+  id         String    @id @default(cuid())
+  threadId   String
+  userId     String
+  status     DMStatus  @default(ACCEPTED)
+  lastReadAt DateTime?
+
+  thread DMThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User     @relation("UserDMParticipants", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([userId, status])
+}
+
+model DMMessage {
+  id          String   @id @default(cuid())
+  threadId    String
+  senderId    String
+  content     String
+  attachments Json?
+  createdAt   DateTime @default(now())
+
+  thread DMThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User     @relation("UserDMs", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
